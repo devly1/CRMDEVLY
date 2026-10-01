@@ -558,7 +558,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .list-controls { align-items: flex-start; flex-direction: column; }
   .search-box { width: 100%; max-width: 420px; }
 }
-@media (min-width: 1450px) {
+@media (min-width: 1900px) {
   .prospect-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
