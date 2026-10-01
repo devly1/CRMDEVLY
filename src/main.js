@@ -5,6 +5,9 @@ import { supabase } from './lib/supabase.js'
 
 const workspaceContext = JSON.parse(sessionStorage.getItem('devly-workspace-context') || 'null')
 const { user, membership, team } = workspaceContext
+const profile = user.userMetadata || user.user_metadata || {}
+let currentDisplayName = profile.full_name || profile.name || ''
+let currentAvatarUrl = profile.avatar_url || ''
 const THEME_KEY = 'devly-theme'
 const statuses = ['pendiente', 'contactado', 'respondio', 'negociacion', 'cerrado']
 const statusLabels = {
@@ -33,6 +36,7 @@ const icons = {
   logout: '<path d="M10 17l5-5-5-5M15 12H3M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>',
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+  camera: '<path d="M14.5 4h-5L8 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3l-1.5-2Z"/><circle cx="12" cy="12" r="3"/>',
 }
 
 const icon = (name, className = '') => `<svg class="icon ${className}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`
@@ -87,7 +91,7 @@ document.querySelector('#app').innerHTML = `
       </nav>
       <div class="sidebar-foot">
         <div class="local-status"><span class="status-light"></span><span>Sincronizado con el equipo</span></div>
-        <div class="workspace-user"><span class="avatar">${escapeHtml((user.email || 'U').slice(0, 1).toUpperCase())}</span><span class="user-details"><strong>${escapeHtml(user.email || 'Usuario')}</strong><small>${membership.role === 'owner' ? 'Administrador' : 'Miembro'}</small></span><button class="icon-button user-menu" type="button" data-action="logout" aria-label="Cerrar sesión" title="Cerrar sesión">${icon('logout')}</button></div>
+        <button class="workspace-user" type="button" data-action="profile" aria-label="Editar mi perfil"><span class="avatar">${currentAvatarUrl ? `<img src="${escapeHtml(currentAvatarUrl)}" alt="">` : escapeHtml((currentDisplayName || user.email || 'U').slice(0, 1).toUpperCase())}</span><span class="user-details"><strong>${escapeHtml(currentDisplayName || user.email || 'Usuario')}</strong><small>${membership.role === 'owner' ? 'Administrador' : 'Miembro'}</small></span><span class="profile-edit-hint">Editar</span></button>
       </div>
     </aside>
 
@@ -166,12 +170,23 @@ document.querySelector('#app').innerHTML = `
       <div class="activity-list" id="activity-list" aria-live="polite"></div>
     </section>
   </dialog>
+  <dialog class="profile-dialog" id="profile-dialog" aria-labelledby="profile-title">
+    <form class="profile-form" id="profile-form">
+      <div class="dialog-heading"><div><span class="eyebrow">MI CUENTA</span><h2 id="profile-title">Mi perfil</h2></div><button class="icon-button" type="button" data-action="close-profile" aria-label="Cerrar perfil">${icon('close')}</button></div>
+      <div class="profile-preview"><span class="profile-preview-avatar" id="profile-preview-avatar">${currentAvatarUrl ? `<img src="${escapeHtml(currentAvatarUrl)}" alt="">` : escapeHtml((currentDisplayName || user.email || 'U').slice(0, 1).toUpperCase())}</span><div><strong id="profile-preview-name">${escapeHtml(currentDisplayName || 'Tu nombre')}</strong><small>${escapeHtml(user.email || '')}</small></div></div>
+      <label class="field"><span>Nombre visible</span><input name="full_name" maxlength="80" placeholder="Ej. Ana García" value="${escapeHtml(currentDisplayName)}"></label>
+      <label class="field"><span>Foto de perfil</span><input name="avatar_url" type="url" maxlength="500" placeholder="https://.../mi-foto.jpg" value="${escapeHtml(currentAvatarUrl)}"><small class="field-help">Usa una URL pública de imagen. También puedes dejarla vacía.</small></label>
+      <p class="form-error" id="profile-error" role="alert"></p>
+      <div class="dialog-actions"><button class="button button-quiet" type="button" data-action="close-profile">Cancelar</button><button class="button button-primary" type="submit">Guardar perfil</button></div>
+    </form>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 `
 
 const grid = document.querySelector('#prospect-grid')
 const dialog = document.querySelector('#prospect-dialog')
 const activityDialog = document.querySelector('#activity-dialog')
+const profileDialog = document.querySelector('#profile-dialog')
 const form = document.querySelector('#prospect-form')
 let toastTimer
 
@@ -318,6 +333,20 @@ const openActivity = async (prospect = null) => {
     return
   }
   list.innerHTML = data.map((entry) => `<article class="activity-entry"><span class="activity-marker"></span><div><strong>${escapeHtml(entry.actor_email)}</strong>${prospect ? '' : `<span class="activity-prospect">${escapeHtml(entry.prospect_name)}</span>`}<p>${escapeHtml(activityDescription(entry))}</p><time>${escapeHtml(formatDateTime(entry.created_at))}</time></div></article>`).join('')
+}
+const openProfile = () => {
+  profileDialog.showModal()
+  profileDialog.querySelector('input[name="full_name"]').focus()
+}
+const renderProfile = () => {
+  const label = currentDisplayName || user.email || 'Usuario'
+  const avatarMarkup = currentAvatarUrl
+    ? `<img src="${escapeHtml(currentAvatarUrl)}" alt="">`
+    : escapeHtml(label.slice(0, 1).toUpperCase())
+  document.querySelector('.workspace-user .avatar').innerHTML = avatarMarkup
+  document.querySelector('.user-details strong').textContent = label
+  document.querySelector('#profile-preview-avatar').innerHTML = avatarMarkup
+  document.querySelector('#profile-preview-name').textContent = currentDisplayName || 'Tu nombre'
 }
 const normalizeWebsite = (value) => {
   const trimmed = value.trim()
@@ -503,6 +532,7 @@ document.querySelector('#app').addEventListener('click', async (event) => {
     case 'export': exportProspects(); break
     case 'edit': if (prospect) openForm(prospect); break
     case 'activity': if (prospect) await openActivity(prospect); break
+    case 'profile': openProfile(); break
     case 'invite':
       try { await navigator.clipboard.writeText(team.invite_code) } catch {}
       showToast(`Código de invitación: ${team.invite_code}`)
@@ -547,6 +577,7 @@ document.querySelector('#app').addEventListener('click', async (event) => {
       break
     case 'close': dialog.close(); break
     case 'close-activity': activityDialog.close(); break
+    case 'close-profile': profileDialog.close(); break
     case 'clear-filters':
       activeFilter = 'todos'
       searchTerm = ''
@@ -613,6 +644,52 @@ dialog.addEventListener('click', (event) => {
 
 activityDialog.addEventListener('click', (event) => {
   if (event.target === activityDialog) activityDialog.close()
+})
+
+profileDialog.addEventListener('click', (event) => {
+  if (event.target === profileDialog) profileDialog.close()
+})
+
+profileDialog.querySelector('input[name="avatar_url"]').addEventListener('input', (event) => {
+  const value = event.target.value.trim()
+  const preview = document.querySelector('#profile-preview-avatar')
+  preview.innerHTML = value ? `<img src="${escapeHtml(value)}" alt="">` : escapeHtml((profileDialog.querySelector('input[name="full_name"]').value.trim() || user.email || 'U').slice(0, 1).toUpperCase())
+})
+
+profileDialog.querySelector('input[name="full_name"]').addEventListener('input', (event) => {
+  if (currentAvatarUrl || profileDialog.querySelector('input[name="avatar_url"]').value.trim()) return
+  document.querySelector('#profile-preview-avatar').textContent = (event.target.value.trim() || user.email || 'U').slice(0, 1).toUpperCase()
+  document.querySelector('#profile-preview-name').textContent = event.target.value.trim() || 'Tu nombre'
+})
+
+profileDialog.querySelector('#profile-form').addEventListener('submit', async (event) => {
+  event.preventDefault()
+  const values = new FormData(event.currentTarget)
+  const name = String(values.get('full_name') || '').trim()
+  const avatar = String(values.get('avatar_url') || '').trim()
+  const error = document.querySelector('#profile-error')
+  if (avatar) {
+    try {
+      const url = new URL(avatar)
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error()
+    } catch {
+      error.textContent = 'La foto debe ser una URL pública que empiece con https://.'
+      return
+    }
+  }
+  const submit = event.currentTarget.querySelector('button[type="submit"]')
+  submit.disabled = true
+  const { error: updateError } = await supabase.auth.updateUser({ data: { full_name: name, avatar_url: avatar } })
+  submit.disabled = false
+  if (updateError) {
+    error.textContent = 'No se pudo guardar el perfil. Inténtalo de nuevo.'
+    return
+  }
+  currentDisplayName = name
+  currentAvatarUrl = avatar
+  renderProfile()
+  profileDialog.close()
+  showToast('Perfil actualizado.')
 })
 
 document.querySelector('#theme-toggle').addEventListener('click', () => {

@@ -30,6 +30,7 @@ En **Authentication > URL Configuration**, configura como `Site URL` la URL loca
 - El resto crea su cuenta y se une con ese código.
 - Todos los miembros pueden ver y gestionar los prospectos del equipo. RLS impide acceder a datos de otros equipos.
 - El historial registra quién creó, editó, contactó, cambió el estatus o eliminó cada negocio. El historial se genera en PostgreSQL.
+- Cada integrante puede pulsar su usuario en la barra lateral para cambiar su nombre visible y una foto pública de perfil. Estos datos se guardan en la metadata de su cuenta de Supabase Auth.
 
 Mantén privado el código de invitación: cualquier persona que lo tenga puede unirse al equipo.
 

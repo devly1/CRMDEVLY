@@ -87,7 +87,7 @@ async function loadWorkspace() {
   }
 
   sessionStorage.setItem('devly-workspace-context', JSON.stringify({
-    user: { id: session.user.id, email: session.user.email },
+    user: { id: session.user.id, email: session.user.email, userMetadata: session.user.user_metadata || {} },
     membership,
     team,
   }))
