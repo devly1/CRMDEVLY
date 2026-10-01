@@ -35,6 +35,8 @@ Mantén privado el código de invitación: cualquier persona que lo tenga puede 
 
 Si había prospectos guardados en `localStorage`, la app intenta importarlos una sola vez al iniciar sesión y elimina la copia local cuando la importación termina correctamente.
 
+En el tablero, usa **Exportar CSV** para descargar un respaldo de todos los prospectos del equipo, sin importar el filtro activo.
+
 ## Desarrollo
 
 ```powershell

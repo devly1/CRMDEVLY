@@ -32,6 +32,7 @@ const icons = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6m3-3h-6"/>',
   logout: '<path d="M10 17l5-5-5-5M15 12H3M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>',
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
 }
 
 const icon = (name, className = '') => `<svg class="icon ${className}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`
@@ -121,7 +122,10 @@ document.querySelector('#app').innerHTML = `
         <section class="prospects-section" aria-label="Lista de negocios">
           <div class="list-heading">
             <div><h2>Mis negocios</h2><span class="results-count" id="results-count">0 resultados</span></div>
-            <button class="button button-quiet button-add-mobile" type="button" data-action="new">${icon('plus')}<span>Agregar</span></button>
+            <div class="list-heading-actions">
+              <button class="button button-quiet export-button" type="button" data-action="export">${icon('download')}<span>Exportar CSV</span></button>
+              <button class="button button-quiet button-add-mobile" type="button" data-action="new">${icon('plus')}<span>Agregar</span></button>
+            </div>
           </div>
           <div class="list-controls">
             <label class="search-box">${icon('search')}<input id="search-input" type="search" placeholder="Buscar negocio o nicho..." autocomplete="off"><kbd>/</kbd></label>
@@ -245,6 +249,39 @@ const showToast = (message) => {
   toast.classList.add('is-visible')
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2800)
+}
+const exportProspects = () => {
+  if (!prospects.length) {
+    showToast('Aún no hay prospectos para exportar.')
+    return
+  }
+
+  const csvCell = (value) => {
+    const text = String(value ?? '')
+    const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+    return `"${safeText.replace(/"/g, '""')}"`
+  }
+  const headers = ['Negocio', 'Nicho', 'Estatus', 'Sitio web', 'Teléfono', 'Notas', 'Creado', 'Última actualización', 'Contactado', 'Respondió']
+  const rows = prospects.map((prospect) => [
+    prospect.name,
+    prospect.niche,
+    statusLabels[prospect.status],
+    prospect.website,
+    prospect.phone,
+    prospect.notes,
+    prospect.createdAt,
+    prospect.updatedAt,
+    prospect.contactedAt,
+    prospect.respondedAt,
+  ])
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')
+  const downloadUrl = URL.createObjectURL(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = downloadUrl
+  link.download = `devly-prospectos-${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(downloadUrl)
+  showToast(`${prospects.length} prospectos exportados.`)
 }
 const activityDescription = (entry) => {
   if (entry.action === 'status_changed') {
@@ -463,6 +500,7 @@ document.querySelector('#app').addEventListener('click', async (event) => {
   const prospect = prospects.find((item) => item.id === button.dataset.id)
   switch (button.dataset.action) {
     case 'new': openForm(); break
+    case 'export': exportProspects(); break
     case 'edit': if (prospect) openForm(prospect); break
     case 'activity': if (prospect) await openActivity(prospect); break
     case 'invite':
