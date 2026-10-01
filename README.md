@@ -32,6 +32,16 @@ En **Authentication > URL Configuration**, configura como `Site URL` la URL loca
 - El historial registra quién creó, editó, contactó, cambió el estatus o eliminó cada negocio. El historial se genera en PostgreSQL.
 - Cada integrante puede pulsar su usuario en la barra lateral para cambiar su nombre visible y una foto pública de perfil. Estos datos se guardan en la metadata de su cuenta de Supabase Auth.
 
+## Funcionalidades actuales
+
+- Tablero con métricas y resumen de prospección por estado.
+- Búsqueda rápida por negocio o nicho y filtros por estatus.
+- Vista alternativa de tarjetas o tabla compacta para gestionar muchos negocios sin saturar la pantalla.
+- Plantillas de mensaje de WhatsApp por negocio para enviar mensajes más específicos y rápidos.
+- Notas rápidas inline para guardar contexto relevante en cada prospecto sin abrir flujos complejos.
+- UI refinada en modo oscuro, más clara, premium y enfocada en lectura rápida.
+- Persistencia de preferencias del tema y del modo de vista en el navegador.
+
 Mantén privado el código de invitación: cualquier persona que lo tenga puede unirse al equipo.
 
 Si había prospectos guardados en `localStorage`, la app intenta importarlos una sola vez al iniciar sesión y elimina la copia local cuando la importación termina correctamente.

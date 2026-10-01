@@ -9,6 +9,8 @@ const profile = user.userMetadata || user.user_metadata || {}
 let currentDisplayName = profile.full_name || profile.name || ''
 let currentAvatarUrl = profile.avatar_url || ''
 const THEME_KEY = 'devly-theme'
+const VIEW_KEY = 'devly-view-mode'
+const MESSAGE_KEY = 'devly-message-templates'
 const statuses = ['pendiente', 'contactado', 'respondio', 'negociacion', 'cerrado']
 const statusLabels = {
   pendiente: 'Pendiente',
@@ -17,6 +19,13 @@ const statusLabels = {
   negociacion: 'En negociación',
   cerrado: 'Cerrado',
 }
+const messageTemplates = [
+  { id: 'without-web', label: 'Negocio sin web', text: 'Hola, vi que tu negocio aún no tiene presencia en internet y me gustaría ayudarte a mejorar tu imagen online para captar más clientes.' },
+  { id: 'slow-web', label: 'Web lenta', text: 'Hola, revisé tu sitio y noté que la experiencia parece lenta; podríamos optimizarlo para que convierta más clientes.' },
+  { id: 'redesign', label: 'Rediseño', text: 'Hola, tu negocio podría verse más profesional con una web moderna y mejor optimizada para conversiones. ¿Te gustaría revisar una propuesta?' },
+]
+const defaultTemplate = 'without-web'
+const templatePreferences = JSON.parse(localStorage.getItem(MESSAGE_KEY) || '{}')
 const icons = {
   arrow: '<path d="M7 17 17 7M7 7h10v10"/>',
   briefcase: '<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/>',
@@ -76,6 +85,7 @@ let activeFilter = 'todos'
 let searchTerm = ''
 let editingId = null
 let theme = localStorage.getItem(THEME_KEY) || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+let viewMode = localStorage.getItem(VIEW_KEY) || 'grid'
 
 document.documentElement.dataset.theme = theme
 document.querySelector('#app').innerHTML = `
@@ -133,12 +143,18 @@ document.querySelector('#app').innerHTML = `
           </div>
           <div class="list-controls">
             <label class="search-box">${icon('search')}<input id="search-input" type="search" placeholder="Buscar negocio o nicho..." autocomplete="off"><kbd>/</kbd></label>
-            <div class="filter-list" role="group" aria-label="Filtrar por estatus">
-              <button class="filter-button is-selected" type="button" data-filter="todos">Todos <span id="count-todos">0</span></button>
-              <button class="filter-button" type="button" data-filter="pendiente">Pendientes <span id="count-pendiente">0</span></button>
-              <button class="filter-button" type="button" data-filter="contactado">Contactados <span id="count-contactado">0</span></button>
-              <button class="filter-button" type="button" data-filter="respondio">Respondieron <span id="count-respondio">0</span></button>
-              <button class="filter-button" type="button" data-filter="cerrado">Cerrados <span id="count-cerrado">0</span></button>
+            <div class="toolbar-right">
+              <div class="view-switch" role="tablist" aria-label="Cambiar vista">
+                <button class="view-switch-button is-active" type="button" data-view="grid" aria-pressed="true">Tarjetas</button>
+                <button class="view-switch-button" type="button" data-view="table" aria-pressed="false">Tabla</button>
+              </div>
+              <div class="filter-list" role="group" aria-label="Filtrar por estatus">
+                <button class="filter-button is-selected" type="button" data-filter="todos">Todos <span id="count-todos">0</span></button>
+                <button class="filter-button" type="button" data-filter="pendiente">Pendientes <span id="count-pendiente">0</span></button>
+                <button class="filter-button" type="button" data-filter="contactado">Contactados <span id="count-contactado">0</span></button>
+                <button class="filter-button" type="button" data-filter="respondio">Respondieron <span id="count-respondio">0</span></button>
+                <button class="filter-button" type="button" data-filter="cerrado">Cerrados <span id="count-cerrado">0</span></button>
+              </div>
             </div>
           </div>
           <div class="prospect-grid" id="prospect-grid"></div>
@@ -358,10 +374,14 @@ const normalizeWebsite = (value) => {
 const websiteLabel = (value) => {
   try { return new URL(value).hostname.replace(/^www\./, '') } catch { return value }
 }
-const whatsappUrl = (phone, name) => {
+const getTemplateMessage = (name, templateId = defaultTemplate) => {
+  const template = messageTemplates.find((item) => item.id === templateId) || messageTemplates[0]
+  return `${template.text.replace(/\s+/g, ' ').trim()}${name ? `\n\nNegocio: ${name}` : ''}`
+}
+const whatsappUrl = (phone, name, templateId = defaultTemplate) => {
   const digits = phone.replace(/\D/g, '')
   if (!digits) return ''
-  const message = `Hola, ${name}. Soy de Devly Studio y quería platicar contigo sobre la presencia web de tu negocio. ¿Tienes un momento?`
+  const message = getTemplateMessage(name, templateId)
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
 }
 const isContacted = (prospect) => Boolean(prospect.contactedAt)
@@ -382,8 +402,10 @@ const renderCard = (prospect) => {
   const website = prospect.website
     ? `<a class="detail-link" href="${escapeHtml(prospect.website)}" target="_blank" rel="noopener noreferrer">${icon('globe')}<span>${escapeHtml(websiteLabel(prospect.website))}</span>${icon('arrow', 'link-arrow')}</a>`
     : `<span class="detail-muted">${icon('globe')}<span>Sin sitio web registrado</span></span>`
-  const whatsApp = whatsappUrl(prospect.phone, prospect.name)
+  const templateId = templatePreferences[prospect.id] || defaultTemplate
+  const whatsApp = whatsappUrl(prospect.phone, prospect.name, templateId)
   const contactMeta = prospect.contactedAt ? `Último contacto ${formatDateTime(prospect.contactedAt)}` : 'Aún no contactado'
+  const notesText = prospect.notes ? escapeHtml(prospect.notes) : 'Sin notas por ahora'
 
   return `<article class="prospect-card" data-status="${prospect.status}">
     <div class="card-topline"><span class="niche-label">${escapeHtml(prospect.niche)}</span><div class="card-menu">
@@ -394,12 +416,69 @@ const renderCard = (prospect) => {
     <h3>${escapeHtml(prospect.name)}</h3>
     <label class="status-control"><span class="status-dot"></span><select aria-label="Estatus de ${escapeHtml(prospect.name)}" data-action="status" data-id="${prospect.id}">${statuses.map((status) => `<option value="${status}" ${prospect.status === status ? 'selected' : ''}>${statusLabels[status]}</option>`).join('')}</select>${icon('chevron', 'status-chevron')}</label>
     <div class="card-details">${website}${prospect.phone ? `<span class="detail-muted">${icon('phone')}<span>${escapeHtml(prospect.phone)}</span></span>` : '<span class="detail-muted">Sin teléfono registrado</span>'}</div>
-    ${prospect.notes ? `<p class="card-notes">${escapeHtml(prospect.notes)}</p>` : '<p class="card-notes is-empty">Sin notas por ahora</p>'}
+    <div class="notes-shell" data-notes-shell="${prospect.id}">
+      <div class="notes-header"><span>Notas</span><button class="notes-toggle" type="button" data-action="note-toggle" data-id="${prospect.id}">${prospect.notes ? 'Editar' : 'Agregar'}</button></div>
+      <div class="notes-preview ${prospect.notes ? '' : 'is-empty'}">${notesText}</div>
+      <div class="notes-editor" hidden>
+        <textarea data-action="note-editor" data-id="${prospect.id}" rows="3">${escapeHtml(prospect.notes || '')}</textarea>
+        <div class="notes-actions"><button class="button button-quiet button-small" type="button" data-action="note-cancel" data-id="${prospect.id}">Cancelar</button><button class="button button-primary button-small" type="button" data-action="note-save" data-id="${prospect.id}">Guardar</button></div>
+      </div>
+    </div>
     <div class="card-footer"><div class="contact-meta"><span class="contact-dot ${isContacted(prospect) ? 'is-contacted' : ''}"></span><span>${contactMeta}</span></div>
-      ${whatsApp ? `<a class="whatsapp-button" href="${escapeHtml(whatsApp)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir WhatsApp para ${escapeHtml(prospect.name)}">${icon('send')}<span>WhatsApp</span></a>` : `<button class="whatsapp-button is-disabled" type="button" disabled title="Agrega un teléfono para habilitar WhatsApp">${icon('send')}<span>WhatsApp</span></button>`}
+      <div class="message-actions">
+        <label class="template-select-wrap" aria-label="Plantilla de WhatsApp">
+          <select data-action="template-select" data-id="${prospect.id}">
+            ${messageTemplates.map((template) => `<option value="${template.id}" ${template.id === templateId ? 'selected' : ''}>${template.label}</option>`).join('')}
+          </select>
+        </label>
+        ${whatsApp ? `<a class="whatsapp-button" href="${escapeHtml(whatsApp)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir WhatsApp para ${escapeHtml(prospect.name)}">${icon('send')}<span>WhatsApp</span></a>` : `<button class="whatsapp-button is-disabled" type="button" disabled title="Agrega un teléfono para habilitar WhatsApp">${icon('send')}<span>WhatsApp</span></button>`}
+      </div>
     </div>
     <button class="contact-action ${isContacted(prospect) ? 'is-done' : ''}" type="button" data-action="contact" data-id="${prospect.id}">${icon(isContacted(prospect) ? 'check' : 'send')}<span>${isContacted(prospect) ? 'Registrar nuevo contacto' : 'Marcar como contactado'}</span></button>
   </article>`
+}
+
+const renderTable = (visible) => {
+  if (!visible.length) {
+    return `<div class="empty-state"><div class="empty-mark">${icon('briefcase')}</div><h3>No encontramos coincidencias</h3><p>Prueba otro nombre, nicho o estatus.</p></div>`
+  }
+
+  return `
+    <div class="prospect-table-wrap">
+      <div class="prospect-table-head">
+        <span>Negocio</span>
+        <span>Nicho</span>
+        <span>Contacto</span>
+        <span>Estatus</span>
+        <span>Notas</span>
+        <span>Acciones</span>
+      </div>
+      ${visible.map((prospect) => {
+        const templateId = templatePreferences[prospect.id] || defaultTemplate
+        const whatsappHref = whatsappUrl(prospect.phone, prospect.name, templateId)
+        const notesValue = prospect.notes ? escapeHtml(prospect.notes) : 'Sin notas'
+        return `<div class="prospect-table-row" data-id="${prospect.id}">
+          <div class="table-business">
+            <strong>${escapeHtml(prospect.name)}</strong>
+            ${prospect.website ? `<a href="${escapeHtml(prospect.website)}" target="_blank" rel="noopener noreferrer">${escapeHtml(websiteLabel(prospect.website))}</a>` : '<span>Sin web</span>'}
+          </div>
+          <div class="table-niche">${escapeHtml(prospect.niche)}</div>
+          <div class="table-contact">
+            ${prospect.phone ? `<span>${escapeHtml(prospect.phone)}</span>` : '<span>Sin teléfono</span>'}
+          </div>
+          <div class="table-status">
+            <span class="status-pill status-${prospect.status}">${statusLabels[prospect.status]}</span>
+          </div>
+          <div class="table-notes">${notesValue}</div>
+          <div class="table-actions">
+            <button class="icon-button card-icon-button" type="button" data-action="edit" data-id="${prospect.id}" aria-label="Editar ${escapeHtml(prospect.name)}">${icon('edit')}</button>
+            <button class="icon-button card-icon-button" type="button" data-action="activity" data-id="${prospect.id}" aria-label="Actividad ${escapeHtml(prospect.name)}">${icon('history')}</button>
+            ${whatsappHref ? `<a class="table-whatsapp" href="${escapeHtml(whatsappHref)}" target="_blank" rel="noopener noreferrer">${icon('send')}</a>` : `<span class="table-whatsapp muted">${icon('send')}</span>`}
+          </div>
+        </div>`
+      }).join('')}
+    </div>
+  `
 }
 
 const render = () => {
@@ -435,12 +514,20 @@ const render = () => {
     button.setAttribute('aria-pressed', String(selected))
   })
 
+  document.querySelectorAll('.view-switch-button').forEach((button) => {
+    const selected = button.dataset.view === viewMode
+    button.classList.toggle('is-active', selected)
+    button.setAttribute('aria-pressed', String(selected))
+  })
+
   if (visible.length) {
-    grid.innerHTML = visible.map(renderCard).join('')
+    grid.innerHTML = viewMode === 'table' ? renderTable(visible) : visible.map(renderCard).join('')
     grid.classList.remove('is-empty')
+    grid.dataset.view = viewMode
   } else {
     const hasFilter = prospects.length > 0
     grid.classList.add('is-empty')
+    grid.dataset.view = viewMode
     grid.innerHTML = `<div class="empty-state"><div class="empty-mark">${icon(hasFilter ? 'search' : 'briefcase')}</div><h3>${hasFilter ? 'No encontramos coincidencias' : 'Tu próxima gran oportunidad empieza aquí'}</h3><p>${hasFilter ? 'Prueba con otro nombre, nicho o estatus.' : 'Agrega un negocio local y lleva el seguimiento de cada conversación.'}</p>${hasFilter ? '<button class="button button-quiet" type="button" data-action="clear-filters">Limpiar búsqueda y filtros</button>' : `<button class="button button-primary" type="button" data-action="new">${icon('plus')}<span>Agregar primer negocio</span></button>`}</div>`
   }
 }
@@ -516,6 +603,14 @@ document.querySelector('#search-input').addEventListener('input', (event) => {
   render()
 })
 
+document.querySelector('.view-switch').addEventListener('click', (event) => {
+  const toggle = event.target.closest('[data-view]')
+  if (!toggle) return
+  viewMode = toggle.dataset.view
+  localStorage.setItem(VIEW_KEY, viewMode)
+  render()
+})
+
 document.querySelector('.filter-list').addEventListener('click', (event) => {
   const button = event.target.closest('[data-filter]')
   if (!button) return
@@ -538,6 +633,40 @@ document.querySelector('#app').addEventListener('click', async (event) => {
       showToast(`Código de invitación: ${team.invite_code}`)
       break
     case 'team-activity': await openActivity(); break
+    case 'note-toggle': {
+      const shell = button.closest('[data-notes-shell]')
+      const editor = shell.querySelector('.notes-editor')
+      const preview = shell.querySelector('.notes-preview')
+      const isHidden = editor.hasAttribute('hidden')
+      editor.toggleAttribute('hidden', !isHidden)
+      preview.style.display = isHidden ? 'none' : 'block'
+      if (isHidden) {
+        const textarea = editor.querySelector('textarea')
+        textarea.focus()
+        textarea.selectionStart = textarea.value.length
+      }
+      break
+    }
+    case 'note-cancel': {
+      const shell = button.closest('[data-notes-shell]')
+      const editor = shell.querySelector('.notes-editor')
+      const preview = shell.querySelector('.notes-preview')
+      editor.setAttribute('hidden', 'hidden')
+      preview.style.display = 'block'
+      break
+    }
+    case 'note-save': {
+      if (!prospect) break
+      const shell = button.closest('[data-notes-shell]')
+      const textarea = shell.querySelector('textarea[data-action="note-editor"]')
+      const nextNote = textarea.value.trim()
+      const nextProspect = { ...prospect, notes: nextNote, updatedAt: new Date().toISOString() }
+      if (!await saveProspect(nextProspect)) break
+      Object.assign(prospect, nextProspect)
+      render()
+      showToast('Notas actualizadas.')
+      break
+    }
     case 'logout': {
       const { error } = await supabase.auth.signOut()
       if (error) {
@@ -589,10 +718,25 @@ document.querySelector('#app').addEventListener('click', async (event) => {
 })
 
 grid.addEventListener('change', async (event) => {
-  if (event.target.dataset.action !== 'status') return
-  const prospect = prospects.find((item) => item.id === event.target.dataset.id)
-  if (!prospect) return
-  if (await updateStatus(prospect, event.target.value)) showToast(`Estatus actualizado: ${statusLabels[event.target.value]}.`)
+  const action = event.target.dataset.action
+  if (action === 'status') {
+    const prospect = prospects.find((item) => item.id === event.target.dataset.id)
+    if (!prospect) return
+    if (await updateStatus(prospect, event.target.value)) showToast(`Estatus actualizado: ${statusLabels[event.target.value]}.`)
+  }
+
+  if (action === 'template-select') {
+    const prospectId = event.target.dataset.id
+    const selectedTemplate = event.target.value
+    templatePreferences[prospectId] = selectedTemplate
+    localStorage.setItem(MESSAGE_KEY, JSON.stringify(templatePreferences))
+    const selectedProspect = prospects.find((item) => item.id === prospectId)
+    if (selectedProspect) {
+      const nextProspect = { ...selectedProspect, updatedAt: new Date().toISOString() }
+      void saveProspect(nextProspect)
+    }
+    render()
+  }
 })
 
 form.addEventListener('submit', async (event) => {
